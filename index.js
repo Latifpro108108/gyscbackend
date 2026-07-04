@@ -29,12 +29,22 @@ function isAllowedOrigin(origin) {
   // Explicitly add the live frontend URLs to prevent CORS errors if env vars aren't synced
   configured.push("https://globalsustainabilitycouncil.netlify.app");
   configured.push("https://gyscwebsiteiong.onrender.com");
+  
+  // HTTPS versions
   configured.push("https://www.globalyouthsustainabilitycouncil.org");
   configured.push("https://globalyouthsustainabilitycouncil.org");
   configured.push("https://www.gyscouncil.com");
   configured.push("https://gyscouncil.com");
   configured.push("https://www.gyscouncil.org");
   configured.push("https://gyscouncil.org");
+  
+  // HTTP versions (in case SSL isn't fully provisioned yet on the new domain)
+  configured.push("http://www.globalyouthsustainabilitycouncil.org");
+  configured.push("http://globalyouthsustainabilitycouncil.org");
+  configured.push("http://www.gyscouncil.com");
+  configured.push("http://gyscouncil.com");
+  configured.push("http://www.gyscouncil.org");
+  configured.push("http://gyscouncil.org");
 
   if (configured.includes(origin)) return true;
   return /^http:\/\/localhost:\d+$/.test(origin) || /^http:\/\/127\.0\.0\.1:\d+$/.test(origin);
