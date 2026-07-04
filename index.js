@@ -25,6 +25,11 @@ function isAllowedOrigin(origin) {
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
+  
+  // Explicitly add the live frontend URLs to prevent CORS errors if env vars aren't synced
+  configured.push("https://globalsustainabilitycouncil.netlify.app");
+  configured.push("https://gyscwebsiteiong.onrender.com");
+
   if (configured.includes(origin)) return true;
   return /^http:\/\/localhost:\d+$/.test(origin) || /^http:\/\/127\.0\.0\.1:\d+$/.test(origin);
 }
