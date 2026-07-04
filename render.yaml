@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: gyscbackend
+    runtime: node
+    plan: free
+    branch: main
+    buildCommand: npm install
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
