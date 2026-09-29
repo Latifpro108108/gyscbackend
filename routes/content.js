@@ -70,6 +70,7 @@ router.get("/", async (_req, res) => {
     const textMap = Object.fromEntries(texts.map((t) => [t.key, t.value]));
     const imageMap = Object.fromEntries(images.map((i) => [i.key, i.url]));
 
+    res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
     res.json({ images, texts, textMap, imageMap, founders, newsletters });
   } catch (err) {
     res.status(500).json({ message: err.message });
