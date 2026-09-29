@@ -4,6 +4,7 @@ import SiteImage from "../models/SiteImage.js";
 import SiteText from "../models/SiteText.js";
 import Founder from "../models/Founder.js";
 import Newsletter from "../models/Newsletter.js";
+import Post from "../models/Post.js";
 import User from "../models/User.js";
 import AuditLog from "../models/AuditLog.js";
 import { uploadImage, uploadFile, deleteAsset } from "../config/cloudinary.js";
@@ -14,6 +15,25 @@ const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 router.use(authRequired, adminRequired);
+
+function slugFromTitle(title) {
+  return title
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "") || "post";
+}
+
+async function uniquePostSlug(title, exceptId) {
+  const base = slugFromTitle(title);
+  let slug = base;
+  let suffix = 2;
+  while (await Post.exists({ slug, ...(exceptId ? { _id: { $ne: exceptId } } : {}) })) {
+    slug = `${base}-${suffix++}`;
+  }
+  return slug;
+}
 
 /* ── Dashboard ── */
 router.get("/dashboard", async (_req, res) => {
@@ -285,6 +305,115 @@ router.delete("/newsletters/:id/pdf", async (req, res) => {
     const obj = item.toObject();
     delete obj.pdfData;
     res.json(obj);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+/* ── Activity and collaboration posts ── */
+router.get("/posts", async (_req, res) => {
+  try {
+    const posts = await Post.find().sort({ updatedAt: -1 }).lean();
+    res.json(posts);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.post("/posts", upload.single("cover"), async (req, res) => {
+  try {
+    const { title, excerpt, body, category, partner = "", eventDate = "", status = "draft", featured = "false" } = req.body;
+    if (!title?.trim() || !excerpt?.trim() || !body?.trim()) {
+      return res.status(400).json({ message: "Title, summary, and post content are required" });
+    }
+    if (!["activity", "collaboration"].includes(category)) {
+      return res.status(400).json({ message: "Choose an activity or collaboration category" });
+    }
+    if (!["draft", "published"].includes(status)) {
+      return res.status(400).json({ message: "Invalid post status" });
+    }
+    if (req.file && !req.file.mimetype.startsWith("image/")) {
+      return res.status(400).json({ message: "Cover must be an image" });
+    }
+
+    const post = new Post({
+      title,
+      slug: await uniquePostSlug(title),
+      excerpt,
+      body,
+      category,
+      partner,
+      eventDate,
+      status,
+      featured: featured === "true",
+      publishedAt: status === "published" ? new Date() : null,
+    });
+    if (req.file) {
+      const result = await uploadImage(req.file.buffer, "posts", `post-${post._id}`);
+      post.coverImageUrl = result.secure_url;
+      post.coverCloudinaryPublicId = result.public_id;
+    }
+    await post.save();
+    if (post.featured) await Post.updateMany({ _id: { $ne: post._id } }, { $set: { featured: false } });
+    res.status(201).json(post);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.put("/posts/:id", upload.single("cover"), async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+    const { title, excerpt, body, category, partner, eventDate, status, featured } = req.body;
+    if (title !== undefined) post.title = title.trim();
+    if (excerpt !== undefined) post.excerpt = excerpt.trim();
+    if (body !== undefined) post.body = body;
+    if (category !== undefined) post.category = category;
+    if (partner !== undefined) post.partner = partner;
+    if (eventDate !== undefined) post.eventDate = eventDate;
+    if (status !== undefined) post.status = status;
+    if (featured !== undefined) post.featured = featured === "true";
+
+    if (!post.title || !post.excerpt || !post.body) {
+      return res.status(400).json({ message: "Title, summary, and post content are required" });
+    }
+    if (!["activity", "collaboration"].includes(post.category)) {
+      return res.status(400).json({ message: "Choose an activity or collaboration category" });
+    }
+    if (!["draft", "published"].includes(post.status)) {
+      return res.status(400).json({ message: "Invalid post status" });
+    }
+    if (req.file && !req.file.mimetype.startsWith("image/")) {
+      return res.status(400).json({ message: "Cover must be an image" });
+    }
+
+    if (title !== undefined) post.slug = await uniquePostSlug(post.title, post._id);
+    if (post.status === "published" && !post.publishedAt) post.publishedAt = new Date();
+    if (post.status === "draft") post.publishedAt = null;
+    if (req.file) {
+      const oldPublicId = post.coverCloudinaryPublicId;
+      const result = await uploadImage(req.file.buffer, "posts", `post-${post._id}`);
+      post.coverImageUrl = result.secure_url;
+      post.coverCloudinaryPublicId = result.public_id;
+      if (oldPublicId && oldPublicId !== result.public_id) await deleteAsset(oldPublicId);
+    }
+
+    await post.save();
+    if (post.featured) await Post.updateMany({ _id: { $ne: post._id } }, { $set: { featured: false } });
+    res.json(post);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.delete("/posts/:id", async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+    if (post.coverCloudinaryPublicId) await deleteAsset(post.coverCloudinaryPublicId);
+    await post.deleteOne();
+    res.json({ message: "Post deleted" });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

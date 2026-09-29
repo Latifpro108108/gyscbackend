@@ -1,4 +1,4 @@
-import "dotenv/config";
+import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -14,6 +14,7 @@ import adminRoutes from "./routes/admin.js";
 import { securityHeaders } from "./middleware/security.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, "utils", ".env") });
 const distPath = path.join(__dirname, "..", "frontend", "dist");
 
 const app = express();

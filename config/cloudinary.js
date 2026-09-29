@@ -1,4 +1,11 @@
-import { v2 as cloudinary } from "cloudinary";
+import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, "..", "utils", ".env") });
+
+const { v2: cloudinary } = await import("cloudinary");
 
 cloudinary.config({
   secure: true,
