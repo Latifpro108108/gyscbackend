@@ -4,6 +4,7 @@ import SiteImage from "../models/SiteImage.js";
 import SiteText from "../models/SiteText.js";
 import Founder from "../models/Founder.js";
 import Newsletter from "../models/Newsletter.js";
+import Post from "../models/Post.js";
 
 const router = express.Router();
 
@@ -57,21 +58,46 @@ router.get("/newsletters/:id/download", async (req, res) => {
   }
 });
 
+router.get("/posts/:slug", async (req, res) => {
+  try {
+    const post = await Post.findOne({ slug: req.params.slug, status: "published" }).lean();
+    if (!post) return res.status(404).json({ message: "Post not found" });
+    res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+    res.json(post);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.get("/posts", async (_req, res) => {
+  try {
+    const posts = await Post.find({ status: "published" })
+      .select("-body")
+      .sort({ publishedAt: -1 })
+      .lean();
+    res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+    res.json(posts);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 /* ── Public content listing ── */
 router.get("/", async (_req, res) => {
   try {
-    const [images, texts, founders, newsletters] = await Promise.all([
+    const [images, texts, founders, newsletters, posts] = await Promise.all([
       SiteImage.find().sort({ section: 1, key: 1 }).lean(),
       SiteText.find().sort({ section: 1, key: 1 }).lean(),
       Founder.find().sort({ order: 1 }).lean(),
       Newsletter.find().select("-pdfData").sort({ createdAt: -1 }).lean(),
+      Post.find({ status: "published" }).select("-body").sort({ publishedAt: -1 }).lean(),
     ]);
 
     const textMap = Object.fromEntries(texts.map((t) => [t.key, t.value]));
     const imageMap = Object.fromEntries(images.map((i) => [i.key, i.url]));
 
     res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
-    res.json({ images, texts, textMap, imageMap, founders, newsletters });
+    res.json({ images, texts, textMap, imageMap, founders, newsletters, posts });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
